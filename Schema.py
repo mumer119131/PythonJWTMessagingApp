@@ -2,7 +2,11 @@
 from datetime import datetime
 from main import db
 
-class User(db.Model):
+class User(db):
+
+    def __init__(self):
+        super().__init__()
+        self.db = db.Model
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -10,6 +14,8 @@ class User(db.Model):
     public_id = db.Column(db.String(50), unique=True)
     profile = db.relationship('Profile', backref='user', lazy=True, uselist=False)
     messages = db.relationship('Message', backref='user', lazy=True)
+    threads = db.relationship('Thread', backref='user', lazy=True)
+
     def __repr__(self):
         return '<User %r>' % self.username
     def to_dict(self):
@@ -42,11 +48,12 @@ class Profile(db.Model):
 
 class Thread(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     title = db.Column(db.String(80), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     messages = db.relationship('Message', backref='thread', lazy=True)
+    participants = db.relationship('Participant', backref='thread', lazy=True)
 
     def to_dict(self):
         return {
@@ -72,4 +79,18 @@ class Message(db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "deleted_at": self.deleted_at
+        }
+
+
+class Participant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    thread_id = db.Column(db.Integer, db.ForeignKey('thread.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    joined_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "thread_id": self.thread_id,
+            "user_id": self.user_id,
+            "joined_at": self.joined_at
         }
