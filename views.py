@@ -50,18 +50,28 @@ def loginUser(data, User, secret_key):
     if not check_password_hash(user.password, password):
         return jsonify({'message': 'Incorrect password!'}), 401
 
-    token = jwt.encode({'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, secret_key)
+    token = jwt.encode({'id': user.id,'email' : user.email, 'username' : user.username,'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=10000)}, secret_key)
 
     return jsonify({'token' : token,'message': 'User logged in successfully!'}), 200
 
 
-def createAThread(data, db, Thread, current_user):
+def createAThread(data, db, Thread, Participant, current_user):
     title = data.get('title')
+
+    if not title:
+        return jsonify({'message': 'Title is required!'}), 400
     new_thread = Thread(
         title=title,
         user_id=current_user.id
     )
     db.session.add(new_thread)
+    db.session.commit()
+    
+    new_participant = Participant(
+        user_id=current_user.id,
+        thread_id=new_thread.id
+    )
+    db.session.add(new_participant)
     db.session.commit()
     return jsonify({'data': new_thread.to_dict(),'message': 'Thread created successfully!'}),201
 
@@ -69,16 +79,36 @@ def createAThread(data, db, Thread, current_user):
 # get Threads
 def getThreads( Thread, current_user):
     threads = Thread.query.filter_by(user_id=current_user.id).all()
+    participants = current_user.participants
+    print(len(participants))
     output = []
-    for thread in threads:
-        output.append(thread.to_dict())
+    for participant in participants:
+        output.append(participant.thread.to_dict())
+    # for thread in threads:
+    #     output.append(thread.to_dict())
+    
     return jsonify({'data': output, 'message': 'Threads fetched successfully!'}), 200
+
+# delete thread
+def deleteThread(data, db, Thread, current_user):
+    thread_id = data.get('thread_id')
+    thread = Thread.query.filter_by(id=thread_id).first()
+
+    if not thread:
+        return jsonify({'message': 'Thread does not exist!'}), 404
+
+    if thread.user_id != current_user.id:
+        return jsonify({'message': 'You are not the owner of this thread!'}), 401
+
+    db.session.delete(thread)
+    db.session.commit()
+    return jsonify({'message': 'Thread deleted successfully!'}), 200
 
 # send message
 def sendMessage(data, db, Message, current_user):
     body = data.get('body')
     thread_id = data.get('thread_id')
-
+    print(body, thread_id)
     new_message = Message(
         body=body,
         user_id=current_user.id,
@@ -114,3 +144,22 @@ def addParticipant(data, db, Thread ,User, Participant, current_user):
     db.session.add(new_participant)
     db.session.commit()
     return jsonify({'data': new_participant.to_dict(),'message': 'Participant added successfully!'}),201
+
+# delete participant
+def deleteParticipant(data, db, Participant, current_user):
+    participant_id = data.get('participant_id')
+    participant = Participant.query.filter_by(id=participant_id).first()
+    thread_user_id = participant.thread.user_id
+
+    if not participant:
+        return jsonify({'message': 'Participant does not exist!'}), 404
+
+    if thread_user_id != current_user.id:
+        return jsonify({'message': 'You are not the owner of this thread!'}), 401
+
+    if thread_user_id == participant.user_id:
+        return jsonify({'message': 'You cannot delete yourself from this thread!'}), 401
+
+    db.session.delete(participant)
+    db.session.commit()
+    return jsonify({'message': 'Participant deleted successfully!'}),200

@@ -2,13 +2,21 @@ from flask_sqlalchemy import SQLAlchemy
 from flask import Flask, request, jsonify, make_response
 from dotenv import load_dotenv
 import os
-from views import registerUser, loginUser, createAThread, getThreads, sendMessage, addParticipant
+from views import registerUser, loginUser, createAThread, getThreads, sendMessage, addParticipant, deleteThread, deleteParticipant
 from datetime import datetime
 from functools import wraps
 import jwt
+from flask_cors import CORS
+
 load_dotenv()
 
 app = Flask(__name__)
+cors = CORS(app, resource={
+    r"/*":{
+        "origins":"*"
+    }
+})
+
 
 # defined the database variables
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
@@ -90,8 +98,10 @@ class Message(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
+        user = User.query.filter_by(id=self.user_id).first()
         return {
             "user_id": self.user_id,
+            "username": user.username,
             "body": self.body,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -154,7 +164,7 @@ def register():
 @app.route('/api/create-thread', methods=['POST'])
 @token_required
 def create_thread(current_user):
-    return createAThread(request.form, db, Thread, current_user)
+    return createAThread(request.form, db, Thread,  Participant, current_user)
 
 
 # get all threads
@@ -162,6 +172,12 @@ def create_thread(current_user):
 @token_required
 def get_threads(current_user):
     return getThreads( Thread, current_user)
+
+# delete thread
+@app.route('/api/delete-thread', methods=['POST'])
+@token_required
+def delete_thread(current_user):
+    return deleteThread(request.form, db, Thread, current_user)
 
 
 # send message
@@ -175,6 +191,15 @@ def send_message(current_user):
 @token_required
 def add_participant(current_user):
     return addParticipant(request.form, db, Thread,User, Participant, current_user)
+
+# delete participant
+@app.route('/api/delete-participant', methods=['POST'])
+@token_required
+def delete_participant(current_user):
+    return deleteParticipant(request.form, db, Thread,User, Participant, current_user)
+
+
+
 
 if __name__ == "__main__":
     with app.app_context():
